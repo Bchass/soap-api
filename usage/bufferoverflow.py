@@ -1,69 +1,71 @@
-#TODO: Figure out how to calculate resp correctly
-
 import re
 
 def replica(streams, resp):
     #order of variables in memory
-    content_len = None
-    jwt = None
-    var2 = None
-    var3 = None
-    var4 = None
-    method_buf = [""] * 64
-    action_buf = [""] * 32
-    combined_action_buf = [""] * 128
-    undef1 = None
-    undef2 = None
-    stack_check_val = None
+    content_len = ""
+    jwt = ""
+    var2 = ""
+    var3 = ""
+    var4 = ""
+    method_buf = ""
+    action_buf = ""
+    combined_action_buf = ""
+    undef1 = ""
+    undef2 = ""
+
 
     #fake stack canary
     stack_check_val = 0x313373
-    print(f"[+] stack check start: 0x{stack_check_val:04x}") 
+    print(f"resp: {resp}")
+    print(f"[+] stack check start: 0x{stack_check_val:x}") 
 
     #null buffers
-    method_buf[:] = [0] * len(method_buf)
-    action_buf[:] = [0] * len(action_buf)
-    combined_action_buf[:] = [0] * len(combined_action_buf)
+    method_buf = ""
+    action_buf = ""
+    combined_action_buf = ""
 
     #call find -1: print the method portion from the xml blob in resp
     #and save it to the method buf. Format: '<m:METHODResponse*')
-    print(f"[+] find call 1: parse method portion from resp")
-    method_buf[0] = f"<m:%sResponse%*s"
+    print(f"[+] search call 1: parse method portion from resp")
+    match = re.search(r"<m:(\w+)Response", resp)
+    if match:
+        method_buf = match.group(1)
+        print(f"[+] method_buf parsed as {method_buf}")
+    else:
+        print(f"[!] Error: \033[0;31mMethod\033[0m not found in resp.")
 
-    var2 = method_buf[0].find("Response") + len("Response") - 1
-    if var2 != -1:
-        print(f"[+] found \033[0;31m'Response'\033[0m in method_buf, NULLED")
-        var2 == -1
+    if "Response" in method_buf:
+        print("[+] found \033[0;31m'Response'\033[0m in method_buff, NULLED")
+        method_buf = method_buf.replace("Response", "")
 
    # ========= Second call to find() and NULL check fail ===========
    # search for service string in resp, no NULL check
    # a long enough METHOD would result in this truncated, causing find() to
    # return a NULL pointer
 
-    print(f"[+] find call 1: check \033[0;31m'service:'\033[0m in resp")
-    var3 = method_buf[0].find("service:")
-    if var3 == -1:
-        print(f"[!] didn't find \033[0;31m'service:'\033[0m,expect a NULL ptr deref")
-        #print("resp: %s", resp)
-       
+    print(f"[+] search call 1: check \033[0;31m'service:'\033[0m in resp")
+    service_match = re.search(r"service:(\w+)", resp)
+    if service_match:
+        var3 = service_match.group
 
-    print(f"[+] find call 2: check for '<ResponseCode>' in resp")
+    if "Response" in method_buf:
+        print("[+] found \033[0;31m'Response'\033[0m in method_bufm NULLED")
+        method_buf = method_buf.replace("Response", "")
 
-    #TODO: Figure out service
-    var3_fmt = 'service:%[^:]'
-    pattern = r'service:(.*)'
-    match = re.match(pattern, var3_fmt)
-    if match:
-        action_buf_1 = match.group(1).strip()
-        print(action_buf_1)
+    service_match = re.search(r"service:([^:]+)", resp)
+    if service_match:
+        action_buf = service_match.group(1)
+        print("[!] didn't find \033[0;31m'service:'\033[0m, expect a NULL ptr deref")
 
-    print(f"[+] str call 2: check for '<ResponseCode>' in resp")
-    var3 = method_buf[0].find("<ResponseCode>")
-    if var3 != -1:
-        print(f"[+] found <ResponseCode>, passed check")
+    print("[+] search call 2: check for \033[0;31m'<ResponseCode>'\033[0m in resp")
+    response_code_match = re.search(r"<ResponseCode>(\d{3})</ResponseCode>", resp)
+    if response_code_match:
+        print("[+] found  \033[0;31m<ResponseCode>\033[0m, passed check")
         undef1 = 0
+    else:
+        print("[!] <ResponseCode> not found, fail check")
 
-    print(f"[+] stack check end: 0x{stack_check_val:04x}")
+    print(f"[+] stack check end: 0x{stack_check_val:x}")
     return 0
 
 def main():
@@ -73,17 +75,13 @@ def main():
     payload = input("PAYLOAD: ")
     print(f"[+] payload length: {payload}")
     # construct the response content the same way the server does in SendSoapRespCode()
-    #resp_b = [""] * 512
-    resp_b = str([0] * 512)
+    resp_fmt = "<m:{}Response xmlns:m=\"urn:NETGEAR-ROUTER:service:{}:1\"></m:{}Response>\r\n<ResponseCode>404</ResponseCode>\r\n"
+    resp = resp_fmt.format(payload, "ConfigSync", payload)
+
     print("[+] calling target function...\n")
-    # this is the fmt string the calling function uses to construct resp
-    resp_fmt = "<m:%sResponse xmlns:m=\"urn:NETGEAR-ROUTER:service:%s:1\"></m:%sResponse>\r\n<ResponseCode>%03d</ResponseCode>\r\n"
-    #for i in range(len(payload)):
-    #    resp_b[i] = payload[i]
-    #print(resp_b, 512, resp_fmt, payload, "ConfigSync", payload, 404)
-    # call the target function with the payload
-    replica(streams, "".join(resp_b))
+    replica(streams, resp)
     return 0
+
 
 if __name__ == "__main__":
     main()
